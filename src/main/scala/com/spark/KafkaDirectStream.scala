@@ -21,20 +21,22 @@ object KafkaDirectStream {
 
   def main(args: Array[String]): Unit = {
     val topicset = "dilip".split(",").toSet
-    val kafkaParams = Map[String, String](
-      "metadata.broker.list" -> "localhost:9092",
-      "serializer.class" -> "kafka.serializer.StringEncoder", "group.id" -> "spark-kafka-consumer"
-    )
+    val kafkaParams = Map[String, String]("metadata.broker.list" -> "localhost:9092", "group.id" -> "spark-kafka-consumer")
     val checkpointDir = "D:\\tmp\\checkpointLogs"
 
     val ssc = StreamingContext.getOrCreate(checkpointDir, initilizeStreamingContext(topicset, kafkaParams, checkpointDir) _)
     ssc.start()
     ssc.awaitTermination()
 
+    sys.addShutdownHook {
+      ssc.stop(true, true)
+    }
+
   }
   def initilizeStreamingContext(topicset: Set[String], kafkaParams: Map[String, String], checkpointDir: String)(): StreamingContext = {
 
     val sparkConf = new SparkConf().setAppName("SparkKafkaStreamService").setMaster("local[*]")
+      .set("spark.streaming.stopGracefullyOnShutdown", "true")
     val ssc = new StreamingContext(sparkConf, Seconds(5))
     //create direct kafka stream
     val messages = createCustomDirectKafkaStream(ssc, kafkaParams, "localhost:2181", "/kafka", topicset).map(_._2)
@@ -54,7 +56,7 @@ object KafkaDirectStream {
   def createCustomDirectKafkaStream(ssc: StreamingContext, kafkaParams: Map[String, String], zkHosts: String, zkPath: String, topics: Set[String]): InputDStream[(String, String)] = {
 
     val topic = topics.last
-    val zkClient = new ZkClient(zkHosts, 30000, 30000)
+    @transient lazy val zkClient = new ZkClient(zkHosts, 30000, 30000)
     println("zookeeper..." + zkClient)
     val storedOffsets = readOffsets(zkClient, zkHosts, zkPath, topic)
     val kafkaStream = storedOffsets match {
