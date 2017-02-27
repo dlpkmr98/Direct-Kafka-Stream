@@ -20,7 +20,7 @@ object KafkaDirectStream {
   Logger.getLogger("akka").setLevel(Level.OFF)
 
   def main(args: Array[String]): Unit = {
-    val topicset = "dilip".split(",").toSet
+    val topicset = "dilip,abhishek".split(",").toSet
     val kafkaParams = Map[String, String]("metadata.broker.list" -> "localhost:9092", "group.id" -> "spark-kafka-consumer")
     val checkpointDir = "D:\\tmp\\checkpointLogs"
 
@@ -29,6 +29,7 @@ object KafkaDirectStream {
     ssc.awaitTermination()
 
     sys.addShutdownHook {
+      println("SHUTDOWN HOOK CALLED!!")
       ssc.stop(true, true)
     }
 
@@ -39,7 +40,7 @@ object KafkaDirectStream {
       .set("spark.streaming.stopGracefullyOnShutdown", "true")
     val ssc = new StreamingContext(sparkConf, Seconds(5))
     //create direct kafka stream
-    val messages = createCustomDirectKafkaStream(ssc, kafkaParams, "localhost:2181", "/kafka", topicset).map(_._2)
+    val messages = createCustomDirectKafkaStream(ssc, kafkaParams, "localhost:2181", "/kafka4", topicset).map(_._2)
     messages.foreachRDD(rdd => {
       if (rdd.take(1).length == 0) {
         println("Empty Record......")
@@ -55,10 +56,10 @@ object KafkaDirectStream {
   //createDirectStream method overloaded
   def createCustomDirectKafkaStream(ssc: StreamingContext, kafkaParams: Map[String, String], zkHosts: String, zkPath: String, topics: Set[String]): InputDStream[(String, String)] = {
 
-    val topic = topics.last
+    //val topic = topics.last
     @transient lazy val zkClient = new ZkClient(zkHosts, 30000, 30000)
     println("zookeeper..." + zkClient)
-    val storedOffsets = readOffsets(zkClient, zkHosts, zkPath, topic)
+    val storedOffsets = readOffsets(zkClient, zkHosts, zkPath)
     val kafkaStream = storedOffsets match {
       case None => //start from the latest offsets
         KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams, topics)
@@ -73,7 +74,7 @@ object KafkaDirectStream {
   }
 
   //Read the previously saved offsets from zookeeper
-  private def readOffsets(zkClient: ZkClient, zkHosts: String, zkPath: String, topic: String): Option[Map[TopicAndPartition, Long]] = {
+  private def readOffsets(zkClient: ZkClient, zkHosts: String, zkPath: String): Option[Map[TopicAndPartition, Long]] = {
     println("Reading offsets from zookeeper....." + zkHosts + "   ," + zkPath)
     val stopwatch = new Stopwatch()
     val (offsetsRangesStrOpt, _) = ZkUtils.readDataMaybeNull(zkClient, zkPath)
@@ -82,7 +83,7 @@ object KafkaDirectStream {
         println("Read offset ranges..:" + offsetsRangerStr)
         val offsets = offsetsRangerStr.split(",")
           .map(s => s.split(":"))
-          .map { case Array(partitionStr, offsetStr) => (TopicAndPartition(topic, partitionStr.toInt) -> offsetStr.toLong) }
+          .map { case Array(topic,partitionStr, offsetStr) => (TopicAndPartition(topic.toString, partitionStr.toInt) -> offsetStr.toLong) }
           .toMap
 
         println("Done reading offsets from zookeeper Took" + stopwatch)
@@ -100,9 +101,9 @@ object KafkaDirectStream {
     val stopwatch = new Stopwatch()
     val offsetsRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
     offsetsRanges.foreach(offsetRange => println("using..:" + offsetRange))
-    val offsetsRangerStr = offsetsRanges.map(offsetRange => s"${offsetRange.partition}:${offsetRange.fromOffset}")
+    val offsetsRangerStr = offsetsRanges.map(offsetRange => s"${offsetRange.topic}:${offsetRange.partition}:${offsetRange.fromOffset}")
       .mkString(",")
-    println("writing offsets to zookeeper zkClient=" + zkClient + "  zkHost" + zkHosts + " offset Range" + offsetsRanges)
+    println("writing offsets to zookeeper zkClient=" + zkClient + "  zkHost" + zkHosts + " offset Range--  " + offsetsRangerStr)
     ZkUtils.updatePersistentPath(zkClient, zkPath, offsetsRangerStr)
     println("done updating offsets in Zookeeper. Took" + stopwatch)
   }
