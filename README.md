@@ -1,7 +1,9 @@
 # Direct-Kafka-Stream
 Direct-Kafka-Stream
 for broker 9 or 9+
+
 Spark Checkpoints
+
 When you use the Direct Stream from Spark to Kafka, Spark uses Kafka’s simple consumer API and does not update the offsets in ZooKeeper, meaning that, when your application restarts, it will start consuming the topic from the end of the queue. Any message produced while the application was not running will not be processed.
 
 Visually, your Spark job consumes messages from the queue and then stops (processed messages are marked as “o”, unprocessed ones as “O”):
