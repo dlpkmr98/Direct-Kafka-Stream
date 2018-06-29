@@ -1,4 +1,4 @@
-# Direct-Kafka-Stream
+# Direct-Kafka-Stream with zero data loss
 Direct-Kafka-Stream
 for broker 9 or 9+
 
